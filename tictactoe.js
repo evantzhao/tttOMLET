@@ -11,6 +11,116 @@ var win1 = 0;
 var win2 = 0;
 var tie = 0;
 
+//Shared Document API
+
+function Initialize(old, params) {
+	return params;
+}
+
+function Update(old, params) {
+	old.moving = params["moving"];
+	return old;
+	console.log("Updating!");
+}
+
+function InitialDocument() {
+	var initValues = {
+		'moving' : "",
+	};
+	return initValues;
+}
+
+function DocumentCreated(doc) {
+  	console.log("Document has been created.");
+}
+
+function ReceiveUpdate(doc) {
+	myDoc = doc;
+	for( key in myDoc)
+	{
+		console.log(key);
+	}
+
+	console.log("moving: " + myDoc["moving"]);
+	moving = JSON.parse(myDoc["moving"]);
+
+	LoadGame();
+	console.log("I received an update!");
+}
+
+function DidNotReceiveUpdate(doc) {
+	console.log("I did not receive an update");
+}
+
+//////////////////////////////
+///// Framework Code   ///////
+//////////////////////////////
+
+var documentApi;
+var myDoc;
+var myDocId;
+
+function watchDocument(docref, OnUpdate) {
+documentApi.watch(docref, function(updatedDocRef) {
+if (docref != myDocId) {
+console.log("Wrong document!!");
+} else {
+      	documentApi.get(docref, OnUpdate);
+    	}
+}, function(result) {
+var timestamp = result.Expires;
+   	var expires = timestamp - new Date().getTime();
+    	var timeout = 0.8 * expires;
+    	setTimeout(function() {
+      	watchDocument(docref, OnUpdate);
+    	}, timeout);
+}, Error);
+}
+
+function initDocument() {
+if (Omlet.isInstalled()) {
+    		documentApi = Omlet.document;
+    		_loadDocument();
+  	}
+}
+
+function hasDocument() {
+var docIdParam = window.location.hash.indexOf("/docId/");
+    	return (docIdParam != -1);
+}
+
+function getDocumentReference() {
+    	var docIdParam = window.location.hash.indexOf("/docId/");
+    	if (docIdParam == -1) return false;
+    	var docId = window.location.hash.substring(docIdParam+7);
+    	var end = docId.indexOf("/");
+    	if (end != -1) {
+      	docId = docId.substring(0, end);
+    	}
+    	return docId;
+}
+
+function _loadDocument() {
+  	if (hasDocument()) {
+    	myDocId = getDocumentReference();
+    		documentApi.get(myDocId, ReceiveUpdate);
+watchDocument(myDocId, ReceiveUpdate);
+} else {
+    		documentApi.create(function(d) {
+      	myDocId = d.Document;
+      	location.hash = "#/docId/" + myDocId;
+      	documentApi.update(myDocId, Initialize, InitialDocument(), 
+function() {
+      	documentApi.get(myDocId, DocumentCreated);
+}, function(e) {
+      alert("error: " + JSON.stringify(e));
+      });
+      watchDocument(myDocId, ReceiveUpdate);
+    		}, function(e) {
+      		alert("error: " + JSON.stringify(e));
+    		});
+  	}
+}
 
 
 //Load the game from old data. 
@@ -35,7 +145,7 @@ function LoadGame()
 		{
 			if(moving[i] ==1)
 			{
-				squares[i].innerHTML = "<img src='https://mobi-summer-evan.s3.amazonaws.com/Tic%20Tac%20Toe/X.png' width = '50' height = '50'>";;
+				squares[i].innerHTML = "<img src='https://mobi-summer-evan.s3.amazonaws.com/Tic%20Tac%20Toe/X.png' width = '50' height = '50'>";
 			}
 			else if(moving[i]==3)
 			{
@@ -67,8 +177,8 @@ function ShareGame(event)
                 displayThumbnailUrl: "https://mobi-summer-evan.s3.amazonaws.com/Tic%20Tac%20Toe/Z.jpg",
                 displayText: "Nobody can beat me at Tic Tac Toe! I dare you to challenge to a local game of Tic Tac Toe!",  
                 webCallback: "https://mobi-summer-evan.s3.amazonaws.com/Tic%20Tac%20Toe/tictactoe.html",
-				json: moving,
-                callback: window.location.href,
+				//json: moving,
+                callback: (window.location.href),
             });
       	Omlet.exit(rdl);
 	}
@@ -294,6 +404,9 @@ function handleClick(squareID)
 		});
 		}
 		
+		var movingText = JSON.stringify(moving);
+
+		documentApi.update(myDocId,Update, {"moving" : movingText} , ReceiveUpdate, DidNotReceiveUpdate);
 	
 	}
 
@@ -314,8 +427,10 @@ Omlet.ready(function() {
 		moving = omletPackage.json;
 		setMessage(moving);
 		LoadGame();
+		initDocument();
 	}
 	else{
+			initDocument();
 		}
 });
 	
